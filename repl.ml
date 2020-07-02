@@ -13,12 +13,14 @@ type given = {
   max_len:int
 }
 
-let consume g =
-  if g.cur<g.max_len 
-  then
-    g.cur<-g.cur+1
-  else
-    ()
+let next_char g =
+  match g.cur<g.max_len with
+  | true->  g.cur<-g.cur+1
+  | false-> ()
+;;
+
+let has_next_char g = 
+  g.cur<g.max_len
 ;;
 
 let current_char g = g.input.[g.cur];;
@@ -38,7 +40,10 @@ let rec print_value a =
   | Nil -> print_string "nil"
   | Num v -> print_string (string_of_int v)
   | Bool v -> 
-    if v=true then print_string "#t" else print_string "#f"
+    ( match v with
+      | true->print_string "#t" 
+      |false-> print_string "#f"
+    )
   | Symbol v -> print_string v
   | Pair (a',b') ->
     print_string "(";print_value a';print_string " ";print_value b';print_string ")";
@@ -47,16 +52,16 @@ let rec print_value a =
 let rec parse_sexpr g =
   let parse_num g =
     let rec helper g n= 
-      if g.cur<g.max_len
+      if has_next_char g
       then
         match current_char g with 
         | '~'->
-          consume g;
+          next_char g;
           helper g ( n^"-")
         | '0'..'9' -> 
           let c = Char.escaped (current_char g)
           in 
-          consume g;
+          next_char g;
           helper g (n ^ c)
         | _ -> n
       else
@@ -68,7 +73,7 @@ let rec parse_sexpr g =
   in
 
   let parse_bool g= 
-    consume g;
+    next_char g;
     match current_char g with
     | 't' -> Bool true
     | 'f' -> Bool false
@@ -79,13 +84,13 @@ let rec parse_sexpr g =
     match current_char g with 
     |'*'|'/'|'>'|'<'|'='|'?'|'!'|'-'|'+'|'A'..'Z'|'a'..'z'-> 
       let rec helper g n= 
-        if g.cur<g.max_len
+        if has_next_char g
         then
           match current_char g with 
           |'*'|'/'|'>'|'<'|'='|'?'|'!'|'-'|'+'|'A'..'Z'|'a'..'z'-> 
             let c = Char.escaped (current_char g)
             in 
-            consume g;
+            next_char g;
             helper g (n ^ c)
           | _ -> Symbol n
         else
@@ -96,13 +101,13 @@ let rec parse_sexpr g =
   in
   let rec consume_delimiter g = 
     match current_char g with
-    |' '|'\t'|'\n'|'\r'-> consume g;consume_delimiter g;
+    |' '|'\t'|'\n'|'\r'-> next_char g;consume_delimiter g;
     | _-> ()
   in
   let rec parse_list g =
     match current_char g with
-    | '(' -> consume g;parse_list g
-    | ')' -> consume g;Nil
+    | '(' -> next_char g;parse_list g
+    | ')' -> next_char g;Nil
     | _->
       let fst = consume_delimiter g;parse_sexpr g
       and snd = consume_delimiter g;parse_list g
