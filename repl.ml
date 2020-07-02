@@ -9,9 +9,19 @@ list: (), (1 2 3) (~3 #t 90)
 
 type given = {
   input:string;
-  mutable  cur:int;
+  mutable cur:int;
   max_len:int
 }
+
+let consume g =
+  if g.cur<g.max_len 
+  then
+    g.cur<-g.cur+1
+  else
+    ()
+;;
+
+let current_char g = g.input.[g.cur];;
 
 type value =
   | Nil
@@ -39,14 +49,14 @@ let rec parse_sexpr g =
     let rec helper g n= 
       if g.cur<g.max_len
       then
-        match g.input.[g.cur] with 
+        match current_char g with 
         | '~'->
-          g.cur <- g.cur+1;
+          consume g;
           helper g ( n^"-")
         | '0'..'9' -> 
-          let c = Char.escaped g.input.[g.cur]
+          let c = Char.escaped (current_char g)
           in 
-          g.cur<-g.cur+1;
+          consume g;
           helper g (n ^ c)
         | _ -> n
       else
@@ -58,24 +68,24 @@ let rec parse_sexpr g =
   in
 
   let parse_bool g= 
-    g.cur <- g.cur+1;
-    match g.input.[g.cur] with
+    consume g;
+    match current_char g with
     | 't' -> Bool true
     | 'f' -> Bool false
-    | _ -> raise (SyntaxError "expect #t or #f of bool type\n")
+    | _ -> raise (SyntaxError ("expect #t or #f of bool type but got `#"^Char.escaped (current_char g)^"`"))
   in
 
   let parse_symbol g =
-    match g.input.[g.cur] with 
+    match current_char g with 
     |'*'|'/'|'>'|'<'|'='|'?'|'!'|'-'|'+'|'A'..'Z'|'a'..'z'-> 
       let rec helper g n= 
         if g.cur<g.max_len
         then
-          match g.input.[g.cur] with 
+          match current_char g with 
           |'*'|'/'|'>'|'<'|'='|'?'|'!'|'-'|'+'|'A'..'Z'|'a'..'z'-> 
-            let c = Char.escaped g.input.[g.cur]
+            let c = Char.escaped (current_char g)
             in 
-            g.cur<-g.cur+1;
+            consume g;
             helper g (n ^ c)
           | _ -> Symbol n
         else
@@ -85,27 +95,27 @@ let rec parse_sexpr g =
     |_-> raise (SyntaxError "expect symbol here")
   in
   let rec consume_delimiter g = 
-    match g.input.[g.cur] with
-    |' '|'\t'|'\n'|'\r'-> g.cur<-g.cur+1;consume_delimiter g;
+    match current_char g with
+    |' '|'\t'|'\n'|'\r'-> consume g;consume_delimiter g;
     | _-> ()
   in
   let rec parse_list g =
-    match g.input.[g.cur] with
-    | '(' -> g.cur<-g.cur+1;parse_list g
-    | ')' -> g.cur<-g.cur+1;Nil
+    match current_char g with
+    | '(' -> consume g;parse_list g
+    | ')' -> consume g;Nil
     | _->
       let fst = consume_delimiter g;parse_sexpr g
       and snd = consume_delimiter g;parse_list g
       in
       Pair (fst,snd)
   in
-  match g.input.[g.cur] with 
+  match current_char g with 
   | '~' | '0'..'9' -> parse_num g
   | '#' -> parse_bool g
   | '(' -> parse_list g
   |'*'|'/'|'>'|'<'|'='|'?'|'!'|'-'|'+'|'A'..'Z'|'a'..'z'-> 
     parse_symbol g
-  | _ -> raise (SyntaxError "Invalid input")
+  | _ -> raise (SyntaxError ("invalid input `"^(Char.escaped (current_char g))^"`") )
 ;;
 
 
@@ -114,12 +124,20 @@ let repl =
     print_string "> ";
     let input = read_line ()
     in
-    let g = {input=input;cur=0;max_len=String.length input}
-    in 
-    let sexpr = parse_sexpr g
-    in
-    print_value sexpr;
-    print_newline ();
-    flush stdout
+    try 
+      if String.length input <> 0
+      then
+        let g = {input=input;cur=0;max_len=String.length input}
+        in 
+        let sexpr = parse_sexpr g
+        in
+        print_value sexpr;
+        print_newline ();
+        flush stdout
+      else
+        ()
+    with
+    |SyntaxError msg -> print_string "SyntaxError: ";print_endline msg
+    |_ -> print_string "RuntimeError: unknown reason";print_newline()
   done
 ;;
