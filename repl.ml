@@ -1,11 +1,4 @@
-(*
-Language Specification
-
-number: 23,12,~32
-boolean: #t,#f
-symbol: hello,yang-yi,+,empty?
-list: (), (1 2 3) (~3 #t 90)
-*)
+(* Handle given input *)
 
 type given = {
   input:string;
@@ -25,6 +18,7 @@ let has_next_char g =
 
 let current_char g = g.input.[g.cur];;
 
+(* Parser implementation *)
 type value =
   | Nil
   | Num of int
@@ -49,7 +43,7 @@ let rec print_value a =
     print_string "(";print_value a';print_string " ";print_value b';print_string ")";
 ;;
 
-let rec parse_sexpr g =
+let rec parse g =
   let parse_num g =
     let rec helper g n= 
       if has_next_char g
@@ -109,7 +103,7 @@ let rec parse_sexpr g =
     | '(' -> next_char g;parse_list g
     | ')' -> next_char g;Nil
     | _->
-      let fst = consume_delimiter g;parse_sexpr g
+      let fst = consume_delimiter g;parse g
       and snd = consume_delimiter g;parse_list g
       in
       Pair (fst,snd)
@@ -123,6 +117,35 @@ let rec parse_sexpr g =
   | _ -> raise (SyntaxError ("invalid input `"^(Char.escaped (current_char g))^"`") )
 ;;
 
+(* Evaluation *)
+exception UnboundError of string;;
+
+let bind (e, k, v) = 
+  Pair(Pair(Symbol k, v), e)
+;;
+
+let rec lookup (k, e) =
+  match e with
+  | Pair(Pair(Symbol k', v), e') ->
+    if k=k' then v else lookup (k, e')
+  | _ -> raise (UnboundError "unbound error")
+;;
+
+let rec eval env expr = 
+  match expr with
+  | Nil -> (env,Nil)
+  | Num a-> (env,Num a)
+  | Bool a-> (env, Bool a)
+  | Symbol a-> (env, Symbol a)
+  | Pair(Symbol "val", Pair(Symbol name,Pair(expr,Nil))) ->
+    let value,_ = eval env expr in
+    let env' = bind (env, name, value) in
+    (env',value)
+  | _ -> (env,expr)
+;;
+
+
+(* main Read-Eval-Print-Loop *)
 
 let repl = 
   while true do
@@ -134,15 +157,15 @@ let repl =
       then
         let g = {input=input;cur=0;max_len=String.length input}
         in 
-        let sexpr = parse_sexpr g
+        let expr = parse g
         in
-        print_value sexpr;
+        print_value expr;
         print_newline ();
         flush stdout
       else
         ()
     with
-    |SyntaxError msg -> print_string "SyntaxError: ";print_endline msg
-    |_ -> print_string "RuntimeError: unknown reason";print_newline()
+    | SyntaxError msg -> print_string "SyntaxError: ";print_endline msg
+    | _ -> print_string "RuntimeError: unknown reason";print_newline()
   done
 ;;
