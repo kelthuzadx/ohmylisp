@@ -124,21 +124,25 @@ let bind (e, k, v) =
   Pair(Pair(Symbol k, v), e)
 ;;
 
-let rec lookup (k, e) =
+let rec lookup (e, k) =
   match e with
   | Pair(Pair(Symbol k', v), e') ->
-    if k=k' then v else lookup (k, e')
+    if k=k' then v else lookup (e',k)
   | _ -> raise (UnboundError "unbound error")
 ;;
 
-let rec eval env expr = 
+let rec eval ~env ~expr = 
   match expr with
   | Nil -> (env,Nil)
   | Num a-> (env,Num a)
   | Bool a-> (env, Bool a)
-  | Symbol a-> (env, Symbol a)
-  | Pair(Symbol "val", Pair(Symbol name,Pair(expr,Nil))) ->
-    let value,_ = eval env expr in
+  | Symbol a->(
+      match a with
+      | "env" -> (env,env)
+      | _ -> (env, lookup (env,a))
+    ) 
+  | Pair(Symbol "val", Pair(Symbol name,expr)) ->
+    let _,value = eval env expr in
     let env' = bind (env, name, value) in
     (env',value)
   | _ -> (env,expr)
@@ -148,6 +152,8 @@ let rec eval env expr =
 (* main Read-Eval-Print-Loop *)
 
 let repl = 
+  let env  = ref Nil 
+  in
   while true do
     print_string "> ";
     let input = read_line ()
@@ -159,13 +165,18 @@ let repl =
         in 
         let expr = parse g
         in
-        print_value expr;
+        (*print_value expr;*)
+        let env',v = eval ~env:!env ~expr:expr 
+        in
+        env := env';
+        print_value v;
         print_newline ();
         flush stdout
       else
         ()
     with
     | SyntaxError msg -> print_string "SyntaxError: ";print_endline msg
+    | UnboundError msg -> print_string "UnboundError: ";print_endline msg
     | _ -> print_string "RuntimeError: unknown reason";print_newline()
   done
 ;;
