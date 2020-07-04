@@ -1,9 +1,9 @@
 (* Handle given input *)
 
-type given = {
+type 'a given = {
   input:string;
   mutable cur:int;
-  max_len:int
+  max_len:int;
 }
 
 let next_char g =
@@ -12,9 +12,7 @@ let next_char g =
   | false-> ()
 ;;
 
-let has_next_char g = 
-  g.cur<g.max_len
-;;
+let has_next_char g = g.cur<g.max_len;;
 
 let current_char g = g.input.[g.cur];;
 
@@ -79,10 +77,14 @@ let rec parse g =
 
   let parse_bool g= 
     next_char g;
-    match current_char g with
-    | 't' -> Bool true
-    | 'f' -> Bool false
-    | _ -> raise (SyntaxError ("expect #t or #f of bool type but got `#"^Char.escaped (current_char g)^"`"))
+    let ret =
+      match current_char g with
+      | 't' -> Bool true
+      | 'f' -> Bool false
+      | _ -> raise (SyntaxError ("expect #t or #f of bool type but got `#"^Char.escaped (current_char g)^"`"))
+    in 
+    next_char g;
+    ret
   in
 
   let parse_symbol g =
@@ -130,16 +132,22 @@ let rec parse g =
 
 (* Evaluation *)
 exception UnboundError of string;;
+exception RuntimeError of string;;
 
-let bind (e, k, v) = 
-  Pair(Pair(Symbol k, v), e)
-;;
+let bind (e, k, v) = Pair(Pair(Symbol k, v), e);;
 
 let rec lookup (e, k) =
   match e with
   | Pair(Pair(Symbol k', v), e') ->
     if k=k' then v else lookup (e',k)
   | _ -> raise (UnboundError "unbound error")
+;;
+
+let rec list_of_pairs p = 
+  match p with
+  | Pair(a,Nil)-> a::[]
+  | Pair(a,b)-> a::(list_of_pairs b)
+  | _ -> raise (RuntimeError "list_of_pairs only takes arugment of pair type")
 ;;
 
 let rec eval ~env ~expr = 
@@ -152,13 +160,15 @@ let rec eval ~env ~expr =
       | "env" -> (env,env)
       | _ -> (env, lookup (env,a))
     ) 
-  | Pair(Symbol "val", Pair(Symbol name,expr)) ->
-    let _,value = eval env expr in
-    let env' = bind (env, name, value) in
-    (env',value)
-  | _ -> (env,expr)
+  | Pair(_,_) -> (
+      match list_of_pairs expr with
+      | [Symbol "val";Symbol name;e]->
+        let _,value = eval env e in
+        let env' = bind (env, name, value) in
+        (env',value)
+      |_->(env,expr)
+    )
 ;;
-
 
 (* main Read-Eval-Print-Loop *)
 
