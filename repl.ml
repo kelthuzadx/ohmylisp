@@ -30,6 +30,15 @@ type value =
 exception SyntaxError of string;;
 
 let rec print_value a = 
+  let rec print_flatten_pair p = 
+    match p with
+    | Pair(a',Nil)-> print_value a';
+    | Pair(a',b') -> 
+      print_value a';
+      print_string " ";
+      print_flatten_pair b';
+    | other -> print_value other;
+  in
   match a with
   | Nil -> print_string "nil"
   | Num v -> print_string (string_of_int v)
@@ -39,8 +48,10 @@ let rec print_value a =
       |false-> print_string "#f"
     )
   | Symbol v -> print_string v
-  | Pair (a',b') ->
-    print_string "(";print_value a';print_string " ";print_value b';print_string ")";
+  | Pair (_,_)->
+    print_string "(";
+    print_flatten_pair a;
+    print_string ")";
 ;;
 
 let rec parse g =
@@ -166,7 +177,7 @@ let repl =
         let expr = parse g
         in
         (*print_value expr;*)
-        let env',v = eval ~env:!env ~expr:expr 
+        let env',v = eval ~env:!env ~expr:expr
         in
         env := env';
         print_value v;
